@@ -1,7 +1,22 @@
 [project]
-name = "hierarchical-vectorless-rag"
+name = "aradbook"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "arabic-reshaper>=3.0.1",
+    "chromadb>=1.5.9",
+    "faiss-cpu>=1.15.0",
+    "gradio>=6.26.0",
+    "langchain-community>=0.4.2",
+    "langchain-google-genai>=4.4.0",
+    "langchain-openai>=1.6.0",
+    "langchain-openrouter>=0.2.8",
+    "langchain-qdrant>=1.1.0",
+    "langchain[openai]>=1.4.0",
+    "pypdf>=6.17.0",
+    "python-bidi>=0.6.11",
+    "python-dotenv>=1.2.3",
+    "qdrant-client>=1.19.0",
+]
