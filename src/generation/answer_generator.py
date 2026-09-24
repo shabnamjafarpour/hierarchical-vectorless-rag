@@ -115,12 +115,13 @@ def answer_question(
     a user question.
     """
 
-    retrieved_nodes = retrieve_from_tree(
+    retrieved_results = retrieve_from_tree(
         tree=document_tree,
         query=query,
         llm=llm,
     )
-
+    retrieved_nodes = retrieved_results['retrieved_nodes']
+    retrieved_traced = retrieved_results['retrieval_trace']
     print(
         f">>> Retrieved "
         f"{len(retrieved_nodes)} nodes."
@@ -135,4 +136,5 @@ def answer_question(
     return {
         "answer": answer,
         "retrieved_nodes": retrieved_nodes,
+        "retrieved_traced" :retrieved_traced
     }    

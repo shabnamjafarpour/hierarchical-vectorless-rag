@@ -27,6 +27,13 @@ from src.preprocessing.tree_builder import (
 )
 
 
+# وقتی UI یک PDF می‌گیره، در نهایت میگه:
+# process_document(...)
+# و pipeline کل preprocessing workflow رو مدیریت می‌کنه.
+# یعنی pipeline.py خودش متخصص extraction یا tree building نیست
+# ؛ متخصص هماهنگ‌کردن مراحل است.
+
+
 
 def process_document(
     file_path: str,

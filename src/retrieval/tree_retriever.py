@@ -2,11 +2,43 @@ import json
 
 from src.utils.json_utils import parse_llm_json
 
+
+# روند کار به این صورت است 
+# Query
+#   ↓
+# از Root شروع کن
+#   ↓
+# ببین کدام Child مرتبط است
+#   ↓
+# وارد Child مرتبط شو
+#   ↓
+# دوباره Children آن را بررسی کن
+#   ↓
+# ...
+#   ↓
+# به Semantic Leaf برس
+#   ↓
+# Content آن را Retrieve کن
+
+# پس Retriever قرار نیست جواب سؤال رو تولید کنه.
+
+# فقط میگه:
+
+# کدام اطلاعات document برای این query مرتبط هستند؟
+
+# Retriever
+# → پیدا کردن اطلاعات مرتبط
+
+# Generator
+# → ساختن جواب از اطلاعات مرتبط
 def _build_children_index(node: dict) -> list[dict]:
     """
     Create a compact representation of the direct
     children of a tree node for retrieval.
     """
+
+
+# _build_children_index() یک representation کوچک از children می‌سازه.
 
     children_index = []
 
@@ -34,6 +66,7 @@ def select_relevant_children(
     Select one or more direct children that may
     contain information relevant to the query.
     """
+   
 
     children = node.get("children", [])
 
@@ -142,8 +175,38 @@ def retrieve_from_tree(
     retrieve relevant semantic nodes.
     """
 
-    retrieved_nodes = []
 
+ 
+    # Retrieval ما Recursive است
+    # یعنی تقریبا این اتفاق میفته
+    # visit(node)
+
+    # آیا semantic leaf است؟
+    #     ↓
+    # YES → Retrieve it
+
+    # NO
+    #     ↓
+    # Children را بررسی کن
+    #     ↓
+    # Relevant children را انتخاب کن
+    #     ↓
+    # برای هر relevant child:
+    #     visit(child)
+    # یعنی تابع خودش خودشو صدا میزنه
+    # Recursive Tree Traversal
+    
+    # حالا چطوری میفهمیم که به leaf رسیدیم ؟
+#     Node has content?
+#        │
+#    ┌───┴───┐
+#   YES      NO
+#    ↓        ↓
+# Retrieve   Continue navigation
+    
+    retrieved_nodes = [] # يك ليست خالي ميسازيم براي retrived node‌ ها
+    retrieval_trace = [] #ميخواهيم ثبت كنيم در هر مرحله دقيقا چه اتفاقي مي افتد
+    
     def traverse(
         node: dict,
         depth: int,
@@ -152,16 +215,16 @@ def retrieve_from_tree(
 
         if depth > max_depth:
             return
-
+# بهتره مسیری که به نود های relevent میرسیم رو حفظ کنیم
         current_path = path + [
             node.get("title", "")
         ]
-
+        #############################
         children = node.get(
             "children",
             [],
         )
-
+        ############################
         content = node.get(
             "content",
             "",
@@ -171,6 +234,10 @@ def retrieve_from_tree(
         # Leaf / semantic node
         # ----------------------------------
 
+
+#خب چطور بفهميم يك node از نوع semantic‌است
+#چك ميكنيم اگر content پس semantic node‌است 
+#آن را retrive‌ كن و اين branch رو متوقف كن
         if content:
 
             retrieved_nodes.append(
@@ -200,19 +267,31 @@ def retrieve_from_tree(
                 }
             )
 
-            return
+
+            retrieval_trace.append({
+                "depth": depth,
+                "current_node": node.get("title", ""),
+                "event": "retrieved",
+                "path": current_path,
+            })
+            return 
 
         # ----------------------------------
         # No content and no children
         # ----------------------------------
 
+#اگر  content نداشت پس  internal node است
+#داخل تابع traversal هستيم كه داره خودشو بازگشتي صدا ميزنه
+#پس ميره دوباره صدا بزنه تا كي؟
+#if depth > max_depth
+# كه اون وقت از اين تابع مياد بيرون
         if not children:
             return
 
         # ----------------------------------
         # Select relevant branches
         # ----------------------------------
-
+# حالا اينجا به كمك llm مياييم relevent children‌رو انتخاب ميكنيم
         selected_children = (
             select_relevant_children(
                 node=node,
@@ -221,22 +300,44 @@ def retrieve_from_tree(
             )
         )
 
+
+        retrieval_trace.append({
+            "depth": depth,
+            "current_node": node.get("title", ""),
+            "candidates": [
+                child.get("title", "")
+                for child in node.get("children", [])
+            ],
+            "selected": [
+                child.get("title", "")
+                for child in selected_children
+            ],
+            "path": current_path,
+        })
         # ----------------------------------
         # Traverse selected branches
         # ----------------------------------
-
+# حالا براي هر selected children‌بيا  و 
+# recursively traverse(child) رو صدا ميزنيم
         for child in selected_children:
 
-            traverse(
+            traverse( 
                 node=child,
-                depth=depth + 1,
+                depth=depth + 1, #اينجا خواست باشه به ازاي هر فرزند كه عميق تر ميشيم
+                                 #يكي به depth‌اضافه ميكنيم تا بتونيم عمق رو كنترل كنيم
                 path=current_path,
             )
 
     traverse(
+        # اين چون يك تابع داخلي است زمان اجرا ميشود كه اينجا صداش كنيم
+        #traversal‌رو از نود Root شروع ميكنيم
         node=tree,
-        depth=0,
-        path=[],
+        depth=0, # براي اينكه depth‌رو كنترل كنيم
+        path=[], # براي اينكه path فعلي رو نگه داريم
     )
 
-    return retrieved_nodes
+# در پایان تمام retrieved semantic nodes را return کن.
+    return {
+    "retrieved_nodes": retrieved_nodes,
+    "retrieval_trace": retrieval_trace,
+}

@@ -3,9 +3,46 @@ import json
 from src.preprocessing.document_loader import combine_pages
 from src.utils.json_utils import parse_llm_json
 
+# SEMANTIC UNIT EXTRACTION
+#تابع قبلي به ما ميگفت ،‌ساختار كلي اين سند چيست
+#حالا اين تابع ميگويد، بر اساس آن ساختار واحد هاي معنايي
+# اين سند را استخراج كن
+# وخروجي يك فايل مشخص json است با اين خروجي ها
+# - node_type
+# - title
+# - content
+# - metadata    كه ميشود اطلاعات ساختار يافته از اين node
+# - entities
+# اینها بعداً leafهای اصلی retrieval tree ما می‌شوند.
+
+
+
+# سوالي كه پيش مياد اينكه semantic unit فرقش با chunk  چيه ؟
+# مرز chunk الزاماً مرز یک مفهوم واقعی نیست.
+# یعنی واحد retrieval را بر اساس معنا و ساختار document 
+# می‌سازیم، نه صرفاً تعداد character/token.
+
+# چرا overlap؟
+# برای جلوگیری از boundary information loss.
+# و داشتن overlap‌ممكنه باعث ايجاد یعنی duplicate/overlapping semantic nodes.
+# بشه و بنابراين ما تابع بهدي رو داريم
+
+# بنابريان ميشود اينطور گفن 
+# No overlap
+#     ↓
+# risk of losing boundary context
+
+# Overlap
+#     ↓
+# better context preservation
+#     ↓
+# but possible duplicates
+#     ↓
+# Consolidation
+
 def extract_semantic_units(
-    documents,
-    document_structure: dict,
+    documents,  # ورودي اول صفحات سند را مي گيرد
+    document_structure: dict,   #خروجي مرحله قبل است 
     llm,
     window_size: int = 3,
     overlap: int = 1,
@@ -149,6 +186,12 @@ Document pages:
 
     return all_nodes
 
+
+#consolidate semantic nodes --------------------------------
+#چون از overlap‌استفاده كرده ايم ،‌ممكن است در نود ها 
+#اطلاعات تكراري ذخيره شهد باشه،‌پس مي آييم و اينجا اوانا رو merge
+#مي كنيم :)
+
 def consolidate_semantic_nodes(
     nodes: list[dict],
     llm,
@@ -249,3 +292,32 @@ Rules:
             print("Response:", response.content)
 
     return consolidated_nodes
+
+# اگر دو duplicate در دو consolidation batch متفاوت بیفتند، این implementation 
+# ممکن است لزوماً آنها را با هم merge نکند.
+
+
+# Fixed-size chunking is simpler and cheaper. In this project,
+# I intentionally moved more computation to offline preprocessing to 
+# construct semantically meaningful retrieval units and preserve document hierarchy. 
+# Since processed documents are cached, that preprocessing cost is paid 
+# once per unique document, while query-time retrieval operates on the persisted tree.
+
+
+
+# تقسیم‌بندی متن به قطعه‌های با اندازه ثابت (Fixed-size Chunking) ساده‌تر و کم‌هزینه‌تر است.
+# در این پروژه، من عمداً بخش بیشتری از محاسبات را به مرحله پیش‌پردازش آفلاین منتقل کردم تا
+# واحدهای بازیابیِ معنادار از نظر معنایی ساخته شوند و ساختار سلسله‌مراتبی سند حفظ شود.
+# از آنجا که اسناد پردازش‌شده کش (Cache) می‌شوند، هزینه این پیش‌پردازش برای هر سند منحصربه‌فرد
+# فقط یک‌بار پرداخت می‌شود؛ در حالی که هنگام اجرای کوئری،
+# فرایند بازیابی روی درخت ذخیره‌شده انجام می‌شود.
+
+# Expensive preprocessing
+#         ↓
+# done once
+#         ↓
+# SHA-256 document_id
+#         ↓
+# persistent storage
+#         ↓
+# next upload → load cached tree

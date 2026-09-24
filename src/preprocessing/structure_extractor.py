@@ -3,6 +3,18 @@ import json
 from src.preprocessing.document_loader import combine_pages
 from src.utils.json_utils import parse_llm_json
 
+
+#در اين تابع از مدل ميخواهيم ، به ازاي داكيومنتي كه به او پاس ميدهيم
+#به عنوان آرگومنت ورودي اين چهار تا عنصر رو برامون extract‌كنه
+# 1. document_type
+# 2. semantic_unit
+# 3. fields
+# 4. hierarchy
+#و خروجي يك list‌خواهد بود
+# كه هر عنصر آن يك partial structure خواهد بود
+
+
+
 def discover_document_structure_batch(
     documents,
     llm,
@@ -10,7 +22,14 @@ def discover_document_structure_batch(
 ) -> list[dict]:
 
     partial_structures = []
-
+# اينجا چه اتفاقي داره ميفته ؟
+#يك ليست داريم به اسم PARTIAL STRUCTURE
+#به ازاي هر batch فرآيند پايين يك فايل json  معتبر 
+#برميگردونه كه شامل اين چهار عنصره
+# 1. document_type
+# 2. semantic_unit
+# 3. fields
+# 4. hierarchy
     for start in range(
         0,
         len(documents),
@@ -20,11 +39,20 @@ def discover_document_structure_batch(
             start + batch_size,
             len(documents),
         )
-
+#اينجا داره ابتدا و انتهاي بازه اي كه از صفحات داكيومنت ورميداريم رو مشخص ميكنه
+#داره ميگه براي start‌از 0 شروع كن و تا انتهاي طول داكيومنت برو با گام هايي
+#به طول batch size
+#براي end‌ هم كه معلومه ، از start به اندازه batch برو جلو
+#اما حواست باشه از طول خود داكيومنت جلوتر نري بنابراين مينيمم بگير
         print(
             f"Discovering structure between "
             f"pages {start + 1}---{end}"
         )
+
+
+#اينجا هم داره تمام صفحاتي از اين داكيومنت كه داخل اين batch
+# قرار داره چون قراه داخل ميخونه يك رشته واحد ميسازه
+#داخل prompt تزريق بشه وبايد يك رشته باشه
 
         document_text = combine_pages(
             documents,
@@ -32,6 +60,8 @@ def discover_document_structure_batch(
             end,
         )
 
+
+# دراين پرامپت از مدل ميخواهيم بلکه از آن می‌خواهیم schema/structure را infer کند.
         prompt = f"""
 You are a document structure discovery system.
 
@@ -126,11 +156,30 @@ Document pages:
     return partial_structures
 
 
+# Build Global Structure From Document
+#هدف اين تابع اينكه ، خروجي مرحله قبل كه اومده 
+#partial structure رو در آورده رو باهم تجميع كنه
+#وبه يك global structure از داكيومنت اوليه ما برسه
+#و خروجي دقيقا يك فايل مشخص json‌است كه  شامل اين موارد است
+        # {{
+        #     "document_type": "",
+        #     "semantic_unit": "",
+        #     "fields": [],
+        #     "hierarchy": []
+        # }}
+
+# تمام partial structureها را به LLM می‌دهد و می‌گوید یک schema کلی برای document بساز.
+
 def merge_document_structures(
     partial_structures: list[dict],
     llm,
 ) -> dict:
 
+
+#اينجا يك ليستي از ديكشنري هارو ميگيريم
+#داخل هر ليست يك فايل json‌است از structure اي كه
+#از آن batch دريافت كرده است 
+#و اونارو تبديل به يك متن رشته اي واحد ميكنيم
     structures_text = json.dumps(
         partial_structures,
         indent=2,
@@ -174,6 +223,8 @@ Rules:
 
     try:
         return parse_llm_json(response)
+        #اينجا داريم خروجي مدل رو تبديل ميكنيم به يك json
+        #و همونو return‌ميكنيم 
 
     except json.JSONDecodeError as error:
         print("Could not merge document structures.")
@@ -186,3 +237,8 @@ Rules:
             "fields": [],
             "hierarchy": [],
         }
+        
+# خب ممكن است سوال شود چرا از چند تا صفحه اول structure رو استخارج نكنيم؟
+#جوابش اينكه بنابراین batchwise discovery باعث می‌شود بخش‌های مختلف document در 
+# schema discovery مشارکت داشته باشند.
+# بعد merge یک global representation می‌سازد.

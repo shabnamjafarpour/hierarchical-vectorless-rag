@@ -5,7 +5,13 @@ from pathlib import Path
 
 
 STORAGE_DIR = Path("storage/documents")
-
+# PDF
+#  ↓
+# Document ID
+#  ↓
+# آیا قبلاً پردازش شده؟
+#  ├── YES → Load cached result
+#  └── NO  → Preprocess → Save result
 
 
 #================================================
@@ -21,13 +27,39 @@ def calculate_document_id(file_path: str) -> str:
     The hash is used as the unique document ID.
     """
 
+# سیستم محتوای فایل رو می‌خونه و ازش یک رشته طولانی تولید می‌کنه:
+# ما بهش ميگيم document id كه يه جورايي اثر انگشت اون فايله
+
+
+# یک SHA-256 calculator برام بساز.
+# اما هنوز هيچ فايلي بهش ندادم
     sha256 = hashlib.sha256()
+
+# اينجا خود فايل رو به صورت binary read باز ميكنيم
+# چون ميخواهيم خود فايل رو hash كنيمم
 
     with open(file_path, "rb") as file:
         while chunk := file.read(8192):
             sha256.update(chunk)
 
+# يعني فايل رو تيكه تيكه بخون، هربار حدود 8192 بايتشو بخون
+# اينطوري لازم نيست كل فايل رو وارد ram‌كنيم 
+# خط بعدي هم يعني اين chunk‌رو هم وارد محاسبه hash  كن
+
+
+# در آخر هم ميگوييم fingerprint‌نهايي رو به صورت string بهم بده
     return sha256.hexdigest()
+# اينجا چه اتفاقي ميفته؟‌اين document id‌كه به ازاي اين فايل 
+# ساخته شده، میاد براش یه فولدر در ادرسس که براش تعیین کردیم می سازه
+# حالا فایل هایی که در مرحله oflline preprocessong میخواهیم بسازیم رو اونجا انجام میده
+# ABC123/
+# │
+# ├── metadata.json
+# ├── structure.json
+# ├── semantic_nodes.json
+# └── tree.json
+
+
 
 
 def get_document_directory(
@@ -52,18 +84,30 @@ def document_exists(
     document_dir = get_document_directory(
         document_id
     )
-
+# بنابراین ما می‌گیم برای اینکه document را processed 
+# در نظر بگیریم، باید تمام فایل‌های موردنیاز وجود داشته باشند:
+# چون ممکنه ÷ردازش انجام شده و تموم شده ولی فایل ها درست ذخیره نشده باشند 
+# پس لازمه هر 4 تا فایل چک بشه
     required_files = [
         "metadata.json",
         "structure.json",
         "semantic_nodes.json",
         "tree.json",
     ]
+# وقتی میگوییم return all یعنی همه شرط های داخلش همزمان برقرار باشند
+# در اینجا میشود همه فایل های مورد نیاز موجود باشند
+# all([True, True, True, True])
+# True
 
+# بنابراین این تابع در نهایت یک پاسخ
+# false یا true برمیگردونه
     return all(
         (document_dir / filename).exists()
         for filename in required_files
     )
+    
+    
+    
     
 def save_json(
     data,
@@ -83,6 +127,8 @@ def save_json(
         "w",
         encoding="utf-8",
     ) as file:
+    #json.dump()
+    #Python → JSON File
         json.dump(
             data,
             file,
