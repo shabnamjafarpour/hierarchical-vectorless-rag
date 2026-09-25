@@ -1,343 +1,382 @@
-import json
+import math
+import re
+import unicodedata
+from collections import Counter
 
-from src.utils.json_utils import parse_llm_json
+
+# =========================================================
+# Persian-aware text normalization
+# =========================================================
+
+_ARABIC_TO_PERSIAN = str.maketrans({
+    "ي": "ی", "ى": "ی", "ئ": "ی",
+    "ك": "ک",
+    "ة": "ه", "ۀ": "ه",
+    "ؤ": "و",
+})
+
+_PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
+_ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩"
+_ASCII_DIGITS = "0123456789"
+_DIGIT_TRANS = str.maketrans(
+    _PERSIAN_DIGITS + _ARABIC_DIGITS,
+    _ASCII_DIGITS + _ASCII_DIGITS,
+)
+
+# Arabic/Persian combining marks + Quranic marks + tatweel.
+_DIACRITICS_RE = re.compile(
+    r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]"
+)
+_NON_WORD_RE = re.compile(r"[^\u0600-\u06FFa-z0-9]+", re.IGNORECASE)
+_TOKEN_RE = re.compile(r"[\u0600-\u06FFa-z0-9]+", re.IGNORECASE)
+
+# Deliberately small: aggressive stop-word removal hurts Persian retrieval.
+_STOP_WORDS = {
+    "چه", "چی", "چیه", "چیست", "کی", "کیه", "کیست", "کدام",
+    "را", "رو", "از", "به", "در", "و", "برای", "با",
+    "این", "آن", "یک", "است", "هست", "هستند",
+    "بگو", "بده", "لطفا", "میشه", "میتونی", "میتوانی",
+}
 
 
-# روند کار به این صورت است 
-# Query
-#   ↓
-# از Root شروع کن
-#   ↓
-# ببین کدام Child مرتبط است
-#   ↓
-# وارد Child مرتبط شو
-#   ↓
-# دوباره Children آن را بررسی کن
-#   ↓
-# ...
-#   ↓
-# به Semantic Leaf برس
-#   ↓
-# Content آن را Retrieve کن
+def normalize_text(text: str) -> str:
+    """Canonical normalization for Persian/Arabic/English retrieval text."""
+    text = unicodedata.normalize("NFKC", str(text or "")).lower()
+    text = text.translate(_ARABIC_TO_PERSIAN).translate(_DIGIT_TRANS)
+    text = _DIACRITICS_RE.sub("", text)
 
-# پس Retriever قرار نیست جواب سؤال رو تولید کنه.
+    # Join-control characters are orthographic variants for retrieval purposes.
+    text = re.sub(r"[\u200c\u200d\u200e\u200f\ufeff]", " ", text)
+    text = _NON_WORD_RE.sub(" ", text)
+    return " ".join(text.split())
 
-# فقط میگه:
 
-# کدام اطلاعات document برای این query مرتبط هستند؟
-
-# Retriever
-# → پیدا کردن اطلاعات مرتبط
-
-# Generator
-# → ساختن جواب از اطلاعات مرتبط
-def _build_children_index(node: dict) -> list[dict]:
+def compact_text(text: str) -> str:
     """
-    Create a compact representation of the direct
-    children of a tree node for retrieval.
+    Space-insensitive representation.
+
+    This makes forms such as «برنامه نویسی», «برنامه‌نویسی» and
+    «برنامهنویسی» comparable without changing persisted document data.
     """
+    return normalize_text(text).replace(" ", "")
 
 
-# _build_children_index() یک representation کوچک از children می‌سازه.
-
-    children_index = []
-
-    for index, child in enumerate(
-        node.get("children", [])
-    ):
-        children_index.append(
-            {
-                "index": index,
-                "title": child.get("title", ""),
-                "type": child.get("type", ""),
-                "summary": child.get("summary", ""),
-            }
-        )
-
-    return children_index
+def tokenize(text: str) -> set[str]:
+    """Return useful normalized lexical tokens."""
+    tokens = _TOKEN_RE.findall(normalize_text(text))
+    return {t for t in tokens if len(t) > 1 and t not in _STOP_WORDS}
 
 
-def select_relevant_children(
-    node: dict,
+def char_ngrams(text: str, n: int = 3) -> set[str]:
+    """Character n-grams over compact text; useful for Persian spacing variants."""
+    value = compact_text(text)
+    if not value:
+        return set()
+    if len(value) <= n:
+        return {value}
+    return {value[i:i + n] for i in range(len(value) - n + 1)}
+
+
+# =========================================================
+# Tree traversal
+# =========================================================
+
+
+def collect_semantic_nodes(node: dict, path: list[str] | None = None) -> list[dict]:
+    """Collect retrievable content nodes without mutating the persisted tree."""
+    if path is None:
+        path = []
+
+    current_path = path + [str(node.get("title", "") or "")]
+    semantic_nodes = []
+
+    if node.get("content"):
+        semantic_nodes.append({
+            "title": node.get("title", ""),
+            "type": node.get("type", ""),
+            "content": node.get("content", ""),
+            "summary": node.get("summary", ""),
+            "metadata": node.get("metadata", {}) or {},
+            "path": current_path,
+        })
+
+    for child in node.get("children", []) or []:
+        semantic_nodes.extend(collect_semantic_nodes(child, current_path))
+
+    return semantic_nodes
+
+
+# =========================================================
+# Query classification
+# =========================================================
+
+_DOCUMENT_TERMS = (
+    "داکیومنت", "سند", "فایل", "پی دی اف", "pdf", "متن", "مدرک",
+)
+
+_DOCUMENT_PATTERNS = (
+    "درباره چیست", "درباره چیه", "موضوع چیست", "موضوع چیه",
+    "محتوای کلی", "خلاصه سند", "خلاصه فایل", "خلاصه داکیومنت",
+    "به طور کلی", "بطور کلی",
+    "چه نوع اطلاعاتی", "چه اطلاعاتی", "چه داده هایی", "چه داده ای",
+    "چه فیلدهایی", "چه فیلد هایی", "ساختار اطلاعات", "ساختار سند",
+    "ساختار فایل", "ساختار داکیومنت",
+)
+
+
+def is_document_level_query(query: str) -> bool:
+    """
+    Detect questions about the document as a whole rather than an entity in it.
+
+    Requiring a document-reference term prevents broad words such as «اطلاعات»
+    from turning ordinary entity questions into DOCUMENT queries.
+    """
+    q = normalize_text(query)
+    has_document_reference = any(term in q for term in _DOCUMENT_TERMS)
+    if not has_document_reference:
+        return False
+
+    if any(pattern in q for pattern in _DOCUMENT_PATTERNS):
+        return True
+
+    intent_terms = (
+        "درباره", "راجع", "موضوع", "محتوا", "خلاصه", "کلی",
+        "اطلاعات", "داده", "فیلد", "ساختار", "شامل",
+    )
+    return any(term in q for term in intent_terms)
+
+
+_COMPLETE_LIST_PATTERNS = (
+    "لیست کامل", "فهرست کامل", "همه موارد", "تمام موارد", "کل موارد",
+    "همه آیتم", "تمام آیتم", "همه را بگو", "همه رو بگو",
+    "همه را نام ببر", "همه رو نام ببر", "تمام را نام ببر",
+    "لیستشون رو بده", "لیستشون را بده", "فهرستشون رو بده",
+    "فهرستشون را بده", "لیست همه", "فهرست همه",
+)
+
+
+def is_complete_list_query(query: str) -> bool:
+    """Detect explicit requests for the complete collection, not title words."""
+    q = normalize_text(query)
+    if any(pattern in q for pattern in _COMPLETE_LIST_PATTERNS):
+        return True
+
+    # A bare "list/fهرست" is sufficient only when it behaves like a request.
+    request_verbs = ("بده", "بگو", "نمایش", "نشون", "نشان", "نام ببر")
+    return (
+        any(word in q.split() for word in ("لیست", "فهرست"))
+        and any(verb in q for verb in request_verbs)
+    )
+
+
+# =========================================================
+# Lexical scoring
+# =========================================================
+
+
+def _metadata_text(node: dict) -> str:
+    metadata = node.get("metadata", {}) or {}
+    return " ".join(f"{key} {value}" for key, value in metadata.items())
+
+
+def _field_texts(node: dict) -> dict[str, str]:
+    return {
+        "title": str(node.get("title", "") or ""),
+        "metadata": _metadata_text(node),
+        "path": " ".join(str(x) for x in (node.get("path", []) or [])),
+        "summary": str(node.get("summary", "") or ""),
+        "content": str(node.get("content", "") or ""),
+    }
+
+
+def _build_idf(nodes: list[dict]) -> dict[str, float]:
+    """Corpus-local IDF so rare query terms matter more than generic terms."""
+    n_docs = max(len(nodes), 1)
+    df = Counter()
+
+    for node in nodes:
+        fields = _field_texts(node)
+        node_tokens = set()
+        for text in fields.values():
+            node_tokens.update(tokenize(text))
+        df.update(node_tokens)
+
+    return {
+        token: math.log((n_docs + 1) / (freq + 1)) + 1.0
+        for token, freq in df.items()
+    }
+
+
+def _weighted_overlap(query_tokens: set[str], field_tokens: set[str], idf: dict[str, float]) -> float:
+    return sum(idf.get(token, 1.0) for token in query_tokens & field_tokens)
+
+
+def _char_similarity(query: str, text: str) -> float:
+    """Jaccard similarity of compact character trigrams."""
+    q = char_ngrams(query)
+    t = char_ngrams(text)
+    if not q or not t:
+        return 0.0
+    return len(q & t) / len(q | t)
+
+
+def score_node(
     query: str,
-    llm,
-) -> list[dict]:
+    query_tokens: set[str],
+    node: dict,
+    idf: dict[str, float] | None = None,
+) -> float:
     """
-    Select one or more direct children that may
-    contain information relevant to the query.
+    Persian-aware field-weighted lexical score.
+
+    Signals:
+    - token overlap with corpus-local IDF
+    - compact exact containment for spacing/ZWNJ variants
+    - character n-gram similarity for near lexical matches
+
+    It remains fully local and vectorless: no embeddings and no query-time LLM.
     """
-   
+    idf = idf or {}
+    fields = _field_texts(node)
 
-    children = node.get("children", [])
+    weights = {
+        "title": 6.0,
+        "metadata": 4.0,
+        "path": 3.0,
+        "summary": 2.0,
+        "content": 1.0,
+    }
 
-    if not children:
-        return []
-
-    children_index = _build_children_index(node)
-
-    children_text = json.dumps(
-        children_index,
-        indent=2,
-        ensure_ascii=False,
-    )
-
-    prompt = f"""
-You are navigating a hierarchical document tree
-to retrieve information relevant to a user's query.
-
-Current node:
-
-Title: {node.get("title", "")}
-Type: {node.get("type", "")}
-
-User query:
-
-{query}
-
-Direct children of the current node:
-
-{children_text}
-
-Determine which children may contain information
-useful for answering the query.
-
-IMPORTANT:
-
-Multiple children may be relevant.
-
-Select ALL children that are reasonably relevant.
-
-Do not force a selection when none of the children
-are relevant.
-
-Return ONLY valid JSON:
-
-{{
-    "selected_indexes": [0, 2]
-}}
-
-Rules:
-
-- selected_indexes must contain only indexes
-  present in the provided children.
-- Multiple indexes are allowed.
-- Do not select unrelated children.
-- If none are relevant, return:
-  {{"selected_indexes": []}}
-- Return ONLY JSON.
-- Do not use Markdown.
-"""
-
-    response = llm.invoke(prompt)
-
-    try:
-        result = parse_llm_json(response)
-
-    except (json.JSONDecodeError, TypeError, ValueError):
-
-        print(
-            f">>> Retrieval JSON parsing failed "
-            f"at node: {node.get('title', '')}"
+    score = 0.0
+    for name, text in fields.items():
+        score += weights[name] * _weighted_overlap(
+            query_tokens, tokenize(text), idf
         )
 
+    q_compact = compact_text(query)
+    title_compact = compact_text(fields["title"])
+
+    # Strong generic signal for exact/near-exact entity titles despite Persian
+    # whitespace or ZWNJ inconsistencies. Minimum length avoids tiny matches.
+    if title_compact and len(title_compact) >= 4 and title_compact in q_compact:
+        score += 18.0
+    elif q_compact and len(q_compact) >= 4 and q_compact in title_compact:
+        score += 10.0
+
+    # Character similarity is deliberately limited to high-value short fields;
+    # applying it to long content would reward generic prose.
+    title_sim = _char_similarity(query, fields["title"])
+    metadata_sim = _char_similarity(query, fields["metadata"])
+    score += 10.0 * title_sim
+    score += 2.0 * metadata_sim
+
+    return score
+
+
+# =========================================================
+# Main retrieval
+# =========================================================
+
+
+def _document_context(tree: dict) -> list[dict]:
+    """Build one synthetic context node describing the document as a whole."""
+    root_summary = str(tree.get("summary", "") or "").strip()
+    document_type = str(tree.get("document_type", "") or "").strip()
+    semantic_unit = str(tree.get("semantic_unit", "") or "").strip()
+    root_title = str(tree.get("title", "") or "").strip()
+
+    if normalize_text(root_title) in {"document", "داکیومنت", "سند"}:
+        root_title = ""
+
+    parts = []
+    if root_title:
+        parts.append(f"Document title: {root_title}")
+    if document_type:
+        parts.append(f"Document type: {document_type}")
+    if semantic_unit:
+        parts.append(f"Semantic unit: {semantic_unit}")
+    if root_summary:
+        parts.append(f"Document summary:\n{root_summary}")
+
+    content = "\n\n".join(parts)
+    if not content:
         return []
 
-    selected_indexes = result.get(
-        "selected_indexes",
-        [],
-    )
-
-    selected_children = []
-
-    for index in selected_indexes:
-
-        if (
-            isinstance(index, int)
-            and 0 <= index < len(children)
-        ):
-            selected_children.append(
-                children[index]
-            )
-
-    return selected_children
-
-
+    return [{
+        "title": root_title,
+        "type": "document",
+        "content": content,
+        "summary": root_summary,
+        "metadata": {
+            "document_type": document_type,
+            "semantic_unit": semantic_unit,
+        },
+        "path": [],
+    }]
 
 
 def retrieve_from_tree(
     tree: dict,
     query: str,
-    llm,
-    max_depth: int = 10,
+    llm=None,
+    top_k: int = 5,
 ) -> list[dict]:
     """
-    Traverse a hierarchical document tree and
-    retrieve relevant semantic nodes.
+    Fast hierarchical vectorless retrieval for Persian-heavy documents.
+
+    Modes:
+      DOCUMENT      -> root/document summary context
+      COMPLETE_LIST -> all semantic nodes
+      SPECIFIC      -> Persian-aware lexical Top-K
+
+    `llm` is retained only for backward compatibility. Retrieval itself makes
+    no LLM call and uses no embeddings/vector database.
     """
+    semantic_nodes = collect_semantic_nodes(tree)
+    print(f">>> Total semantic nodes: {len(semantic_nodes)}")
 
+    if not semantic_nodes:
+        print(">>> No semantic nodes found.")
+        return []
 
- 
-    # Retrieval ما Recursive است
-    # یعنی تقریبا این اتفاق میفته
-    # visit(node)
+    if is_document_level_query(query):
+        print(">>> Retrieval mode: DOCUMENT")
+        return _document_context(tree)
 
-    # آیا semantic leaf است؟
-    #     ↓
-    # YES → Retrieve it
+    if is_complete_list_query(query):
+        print(">>> Retrieval mode: COMPLETE_LIST")
+        return semantic_nodes
 
-    # NO
-    #     ↓
-    # Children را بررسی کن
-    #     ↓
-    # Relevant children را انتخاب کن
-    #     ↓
-    # برای هر relevant child:
-    #     visit(child)
-    # یعنی تابع خودش خودشو صدا میزنه
-    # Recursive Tree Traversal
-    
-    # حالا چطوری میفهمیم که به leaf رسیدیم ؟
-#     Node has content?
-#        │
-#    ┌───┴───┐
-#   YES      NO
-#    ↓        ↓
-# Retrieve   Continue navigation
-    
-    retrieved_nodes = [] # يك ليست خالي ميسازيم براي retrived node‌ ها
-    retrieval_trace = [] #ميخواهيم ثبت كنيم در هر مرحله دقيقا چه اتفاقي مي افتد
-    
-    def traverse(
-        node: dict,
-        depth: int,
-        path: list[str],
-    ) -> None:
+    print(">>> Retrieval mode: SPECIFIC")
+    query_tokens = tokenize(query)
+    if not query_tokens:
+        print(">>> Query contains no useful tokens.")
+        return []
 
-        if depth > max_depth:
-            return
-# بهتره مسیری که به نود های relevent میرسیم رو حفظ کنیم
-        current_path = path + [
-            node.get("title", "")
-        ]
-        #############################
-        children = node.get(
-            "children",
-            [],
+    idf = _build_idf(semantic_nodes)
+    scored_nodes = []
+
+    for node in semantic_nodes:
+        score = score_node(
+            query=query,
+            query_tokens=query_tokens,
+            node=node,
+            idf=idf,
         )
-        ############################
-        content = node.get(
-            "content",
-            "",
-        )
+        if score > 0:
+            scored_nodes.append((score, node))
 
-        # ----------------------------------
-        # Leaf / semantic node
-        # ----------------------------------
-
-
-#خب چطور بفهميم يك node از نوع semantic‌است
-#چك ميكنيم اگر content پس semantic node‌است 
-#آن را retrive‌ كن و اين branch رو متوقف كن
-        if content:
-
-            retrieved_nodes.append(
-                {
-                    "title": node.get(
-                        "title",
-                        "",
-                    ),
-                    "type": node.get(
-                        "type",
-                        "",
-                    ),
-                    "content": content,
-                    "metadata": node.get(
-                        "metadata",
-                        {},
-                    ),
-                    "entities": node.get(
-                        "entities",
-                        [],
-                    ),
-                    "summary": node.get(
-                        "summary",
-                        "",
-                    ),
-                    "path": current_path,
-                }
-            )
-
-
-            retrieval_trace.append({
-                "depth": depth,
-                "current_node": node.get("title", ""),
-                "event": "retrieved",
-                "path": current_path,
-            })
-            return 
-
-        # ----------------------------------
-        # No content and no children
-        # ----------------------------------
-
-#اگر  content نداشت پس  internal node است
-#داخل تابع traversal هستيم كه داره خودشو بازگشتي صدا ميزنه
-#پس ميره دوباره صدا بزنه تا كي؟
-#if depth > max_depth
-# كه اون وقت از اين تابع مياد بيرون
-        if not children:
-            return
-
-        # ----------------------------------
-        # Select relevant branches
-        # ----------------------------------
-# حالا اينجا به كمك llm مياييم relevent children‌رو انتخاب ميكنيم
-        selected_children = (
-            select_relevant_children(
-                node=node,
-                query=query,
-                llm=llm,
-            )
-        )
-
-
-        retrieval_trace.append({
-            "depth": depth,
-            "current_node": node.get("title", ""),
-            "candidates": [
-                child.get("title", "")
-                for child in node.get("children", [])
-            ],
-            "selected": [
-                child.get("title", "")
-                for child in selected_children
-            ],
-            "path": current_path,
-        })
-        # ----------------------------------
-        # Traverse selected branches
-        # ----------------------------------
-# حالا براي هر selected children‌بيا  و 
-# recursively traverse(child) رو صدا ميزنيم
-        for child in selected_children:
-
-            traverse( 
-                node=child,
-                depth=depth + 1, #اينجا خواست باشه به ازاي هر فرزند كه عميق تر ميشيم
-                                 #يكي به depth‌اضافه ميكنيم تا بتونيم عمق رو كنترل كنيم
-                path=current_path,
-            )
-
-    traverse(
-        # اين چون يك تابع داخلي است زمان اجرا ميشود كه اينجا صداش كنيم
-        #traversal‌رو از نود Root شروع ميكنيم
-        node=tree,
-        depth=0, # براي اينكه depth‌رو كنترل كنيم
-        path=[], # براي اينكه path فعلي رو نگه داريم
+    # Stable deterministic tie-breakers improve reproducibility.
+    scored_nodes.sort(
+        key=lambda item: (
+            item[0],
+            compact_text(item[1].get("title", "")),
+        ),
+        reverse=True,
     )
 
-# در پایان تمام retrieved semantic nodes را return کن.
-    return {
-    "retrieved_nodes": retrieved_nodes,
-    "retrieval_trace": retrieval_trace,
-}
+    print(f">>> Matching semantic nodes: {len(scored_nodes)}")
+    if not scored_nodes:
+        return []
+
+    return [node for _, node in scored_nodes[:top_k]]

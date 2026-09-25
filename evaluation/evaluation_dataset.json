@@ -1,0 +1,167 @@
+[
+  {
+    "id": "q01",
+    "category": "factual",
+    "question": "نویسنده کتاب «راز در مه» کیست؟",
+    "expected_answer": "سارا احمدی",
+    "expected_identifiers": ["ARAD-0001"],
+    "answerable": true
+  },
+  {
+    "id": "q02",
+    "category": "factual",
+    "question": "موضوع کتاب «نقطهٔ هوش مصنوعی» چیست؟",
+    "expected_answer": "هوش مصنوعی",
+    "expected_identifiers": ["ARAD-0011"],
+    "answerable": true
+  },
+  {
+    "id": "q03",
+    "category": "factual",
+    "question": "کتاب «پایتون برای همه» چند صفحه دارد؟",
+    "expected_answer": "۵۲۸ صفحه",
+    "expected_identifiers": ["ARAD-0107"],
+    "answerable": true
+  },
+  {
+    "id": "q04",
+    "category": "factual",
+    "question": "امتیاز کاربران کتاب «یادگیری ماشین از صفر» چند است؟",
+    "expected_answer": "۴٫۹ از ۵",
+    "expected_identifiers": ["ARAD-0111"],
+    "answerable": true
+  },
+  {
+    "id": "q05",
+    "category": "factual",
+    "question": "وضعیت کتاب «رهبری مؤثر» چیست؟",
+    "expected_answer": "امانت داده شده",
+    "expected_identifiers": ["ARAD-0120"],
+    "answerable": true
+  },
+  {
+    "id": "q06",
+    "category": "factual",
+    "question": "نویسنده کتاب «برنامه‌نویسی حرفه‌ای» کیست؟",
+    "expected_answer": "نسترن صادقی",
+    "expected_identifiers": ["ARAD-0087"],
+    "answerable": true
+  },
+
+  {
+    "id": "q07",
+    "category": "semantic",
+    "question": "کدام کتاب درباره تهدیدهای شبکه، شناسایی حملات و محافظت از زیرساخت‌های ارتباطی صحبت می‌کند؟",
+    "expected_answer": "امنیت شبکه",
+    "expected_identifiers": ["ARAD-0119"],
+    "answerable": true
+  },
+  {
+    "id": "q08",
+    "category": "semantic",
+    "question": "کتابی معرفی کن که درباره کسب‌وکارهای اینترنتی و پلتفرم‌های دیجیتال صحبت می‌کند.",
+    "expected_answer": "اقتصاد دیجیتال",
+    "expected_identifiers": ["ARAD-0086"],
+    "answerable": true
+  },
+  {
+    "id": "q09",
+    "category": "semantic",
+    "question": "کدام کتاب کاربرد هوش مصنوعی و اینترنت اشیا را در حمل‌ونقل، انرژی و مدیریت شهری بررسی می‌کند؟",
+    "expected_answer": "شهرهای هوشمند",
+    "expected_identifiers": ["ARAD-0104"],
+    "answerable": true
+  },
+  {
+    "id": "q10",
+    "category": "semantic",
+    "question": "کدام کتاب درباره تأثیر احساسات و تجربه‌های گذشته بر تصمیم‌گیری انسان صحبت می‌کند؟",
+    "expected_answer": "قدرت انتخاب",
+    "expected_identifiers": ["ARAD-0095"],
+    "answerable": true
+  },
+
+  {
+    "id": "q11",
+    "category": "filter",
+    "question": "یک کتاب موجود درباره برنامه‌نویسی پایتون معرفی کن.",
+    "expected_answer": "پایتون برای همه",
+    "expected_identifiers": ["ARAD-0107"],
+    "answerable": true
+  },
+  {
+    "id": "q12",
+    "category": "filter",
+    "question": "یک کتاب هوش مصنوعی با امتیاز ۴٫۹ از ۵ معرفی کن.",
+    "expected_answer": "یادگیری ماشین از صفر",
+    "expected_identifiers": ["ARAD-0111"],
+    "answerable": true
+  },
+  {
+    "id": "q13",
+    "category": "filter",
+    "question": "یک کتاب تاریخی معرفی کن که درباره تمدن‌هایی با اطلاعات از دست رفته صحبت می‌کند.",
+    "expected_answer": "تمدن‌های فراموش‌شده",
+    "expected_identifiers": ["ARAD-0103"],
+    "answerable": true
+  },
+
+  {
+    "id": "q14",
+    "category": "comparison",
+    "question": "«نقطهٔ هوش مصنوعی» و «یادگیری ماشین از صفر» از نظر محتوای آموزشی چه تفاوتی دارند؟",
+    "expected_answer": "نقطهٔ هوش مصنوعی مقدمه‌ای عمومی‌تر بر هوش مصنوعی و موضوعاتی مانند یادگیری ماشین، شبکه‌های عصبی و پردازش زبان طبیعی است؛ یادگیری ماشین از صفر به‌صورت مرحله‌به‌مرحله بر مفاهیم یادگیری ماشین، طبقه‌بندی، رگرسیون و ارزیابی مدل‌ها تمرکز دارد.",
+    "expected_identifiers": ["ARAD-0011", "ARAD-0111"],
+    "answerable": true
+  },
+  {
+    "id": "q15",
+    "category": "comparison",
+    "question": "«اقتصاد دیجیتال» و «بازارهای نوین» از نظر موضوعاتی که بررسی می‌کنند چه تفاوتی دارند؟",
+    "expected_answer": "اقتصاد دیجیتال بر اقتصاد مبتنی بر فناوری، کسب‌وکارهای اینترنتی و پلتفرم‌های دیجیتال تمرکز دارد؛ بازارهای نوین ساختار بازارهای مدرن، رفتار مصرف‌کنندگان، تجارت الکترونیک و تأثیر فناوری بر رقابت شرکت‌ها را بررسی می‌کند.",
+    "expected_identifiers": ["ARAD-0086", "ARAD-0106"],
+    "answerable": true
+  },
+
+  {
+    "id": "q16",
+    "category": "document_level",
+    "question": "این داکیومنت به طور کلی درباره چیست؟",
+    "expected_answer": "پایگاه اطلاعات کتاب‌های کتابخانه آراد است.",
+    "expected_identifiers": [],
+    "answerable": true
+  },
+  {
+    "id": "q17",
+    "category": "document_level",
+    "question": "برای هر کتاب چه نوع اطلاعاتی در این داکیومنت ذخیره شده است؟",
+    "expected_answer": "عنوان، نویسنده، موضوع، سال انتشار، ناشر، تعداد صفحات، زبان، شابک، امتیاز کاربران، وضعیت امانت، شماره قفسه و خلاصه کتاب",
+    "expected_identifiers": [],
+    "answerable": true
+  },
+
+  {
+    "id": "q18",
+    "category": "unanswerable",
+    "question": "شماره تلفن نویسنده کتاب «راز در مه» چیست؟",
+    "expected_answer": "این اطلاعات در سند وجود ندارد.",
+    "expected_identifiers": ["ARAD-0001"],
+    "answerable": false
+  },
+  {
+    "id": "q19",
+    "category": "unanswerable",
+    "question": "مدرک تحصیلی نویسنده کتاب «امنیت شبکه» چیست؟",
+    "expected_answer": "این اطلاعات در سند وجود ندارد.",
+    "expected_identifiers": ["ARAD-0119"],
+    "answerable": false
+  },
+  {
+    "id": "q20",
+    "category": "unanswerable",
+    "question": "قیمت کتاب «پایتون برای همه» چقدر است؟",
+    "expected_answer": "این اطلاعات در سند وجود ندارد.",
+    "expected_identifiers": ["ARAD-0107"],
+    "answerable": false
+  }
+]

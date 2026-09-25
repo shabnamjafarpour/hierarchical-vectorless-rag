@@ -1,10 +1,12 @@
 import os
 
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 
 load_dotenv()
+
+
 # """
 # اينجا Environment Variables هارو لود ميكنيم
 # """
@@ -15,13 +17,36 @@ load_dotenv()
 #  Centralized Configuration ‌انجام بديم
 # """
 
-MODEL_NAME = "gemini-3.1-flash-lite"
+
+MODEL_NAME = "claude-sonnet-4-6"
 MAX_TOKENS = 8000
 
-PROXY_URL = os.getenv(
-    "LLM_PROXY_URL",
-    "http://127.0.0.1:12334"
-)
+VYCE_API_KEY = os.getenv("VYCE_API_KEY")
+VYCE_BASE_URL = "https://vyceai.com/v1"
+
+
+def load_model(model_name: str = MODEL_NAME):
+    """
+    Create the LLM client used by the application.
+
+    Vyce exposes an OpenAI-compatible API, so ChatOpenAI
+    can be used with a custom base URL.
+    """
+
+    if not VYCE_API_KEY:
+        raise ValueError(
+            "VYCE_API_KEY was not found in the environment."
+        )
+
+    llm = ChatOpenAI(
+        model=model_name,
+        api_key=VYCE_API_KEY,
+        base_url=VYCE_BASE_URL,
+        max_tokens=MAX_TOKENS,
+        temperature=0,
+    )
+
+    return llm
 
 # os.getenv() می‌تواند دو argument بگیرد:
 #os.getenv(KEY, DEFAULT_VALUE)
@@ -37,13 +62,3 @@ PROXY_URL = os.getenv(
 # چون نميخواهيم هر ماژول براي خودش يك مدل جديد بسازه
 
 
-def load_model():
-    llm = ChatGoogleGenerativeAI(
-        model=MODEL_NAME,
-        max_tokens=MAX_TOKENS,
-        client_args={
-            "proxy": PROXY_URL
-        }
-    )
-
-    return llm
