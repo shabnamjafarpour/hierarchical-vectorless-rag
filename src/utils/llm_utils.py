@@ -1,4 +1,5 @@
 def response_to_text(response) -> str:
+    """Normalize model response content into plain text across supported response shapes."""
     content = response.content
 
     if isinstance(content, str):

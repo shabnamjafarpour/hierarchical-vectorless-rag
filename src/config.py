@@ -8,13 +8,13 @@ load_dotenv()
 
 
 # """
-# اينجا Environment Variables هارو لود ميكنيم
+
 # """
 
 
 # """
-# هدف اين فايل اينكه در پروژمون بيايم 
-#  Centralized Configuration ‌انجام بديم
+
+
 # """
 
 
@@ -48,17 +48,5 @@ def load_model(model_name: str = MODEL_NAME):
 
     return llm
 
-# os.getenv() می‌تواند دو argument بگیرد:
+
 #os.getenv(KEY, DEFAULT_VALUE)
-#يعني اگر مقدار key در فايل .env نبود پس بيا و 
-# fallback بزن مقدار پيش فرض رو بگير
-
-
-
-# اين تابع مسول ساخت llm client‌است 
-#اينجا داريم از google provider براي 
-# inference گرفتن از مدل استفاده ميكنيم
-#حالا اصلا چرا مدل رو return ‌ميكنيم؟
-# چون نميخواهيم هر ماژول براي خودش يك مدل جديد بسازه
-
-

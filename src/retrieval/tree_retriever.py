@@ -161,7 +161,7 @@ def is_complete_list_query(query: str) -> bool:
     if any(pattern in q for pattern in _COMPLETE_LIST_PATTERNS):
         return True
 
-    # A bare "list/fهرست" is sufficient only when it behaves like a request.
+
     request_verbs = ("بده", "بگو", "نمایش", "نشون", "نشان", "نام ببر")
     return (
         any(word in q.split() for word in ("لیست", "فهرست"))
@@ -175,11 +175,13 @@ def is_complete_list_query(query: str) -> bool:
 
 
 def _metadata_text(node: dict) -> str:
+    """Flatten node metadata into searchable text without changing the persisted representation."""
     metadata = node.get("metadata", {}) or {}
     return " ".join(f"{key} {value}" for key, value in metadata.items())
 
 
 def _field_texts(node: dict) -> dict[str, str]:
+    """Build weighted searchable fields from a semantic node."""
     return {
         "title": str(node.get("title", "") or ""),
         "metadata": _metadata_text(node),
@@ -208,6 +210,7 @@ def _build_idf(nodes: list[dict]) -> dict[str, float]:
 
 
 def _weighted_overlap(query_tokens: set[str], field_tokens: set[str], idf: dict[str, float]) -> float:
+    """Compute IDF-weighted token overlap between query tokens and a document field."""
     return sum(idf.get(token, 1.0) for token in query_tokens & field_tokens)
 
 

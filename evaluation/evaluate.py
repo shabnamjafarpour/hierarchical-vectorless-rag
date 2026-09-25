@@ -44,8 +44,8 @@ def fa(text: str) -> str:
     return get_display(reshaped_text)
 
 
-
 def load_evaluation_dataset() -> list[dict]:
+    """Load the benchmark questions and ground-truth annotations."""
     with open(
         DATASET_PATH,
         "r",
@@ -91,6 +91,7 @@ def calculate_retrieval_hit(
 
 
 def save_results(results: list[dict]) -> None:
+    """Persist evaluation progress so completed queries survive later provider failures."""
     with open(
         RESULTS_PATH,
         "w",
@@ -109,6 +110,7 @@ def save_results(results: list[dict]) -> None:
 # --------------------------------------------------
 
 def evaluate():
+    """Run retrieval and grounded generation across the evaluation dataset."""
     print("\n================================")
     print(" RAG EVALUATION")
     print("================================\n")
@@ -232,7 +234,7 @@ def evaluate():
         results.append(result)
 
         # Save after every question.
-        # If Gemini fails later, previous results survive.
+        # Persist after each query so provider failures do not discard earlier results.
         save_results(results)
 
         print(

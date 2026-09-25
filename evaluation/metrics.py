@@ -40,15 +40,18 @@ EXCLUDED_FROM_PRIMARY_BENCHMARK = {
 
 
 def load_results() -> list[dict]:
+    """Load persisted evaluation results from disk."""
     with open(RESULTS_PATH, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def mean(values: list[float]) -> float:
+    """Return the arithmetic mean, or zero for an empty input."""
     return statistics.mean(values) if values else 0.0
 
 
 def median(values: list[float]) -> float:
+    """Return the median, or zero for an empty input."""
     return statistics.median(values) if values else 0.0
 
 
@@ -85,6 +88,7 @@ def calculate_retrieval_metrics(results: list[dict]) -> dict:
 
 
 def calculate_answer_correctness() -> dict:
+    """Aggregate manually reviewed answer-correctness labels."""
     correct = sum(ANSWER_CORRECTNESS.values())
     total = len(ANSWER_CORRECTNESS)
 
@@ -123,6 +127,7 @@ def calculate_unanswerable_accuracy(results: list[dict]) -> dict:
 
 
 def calculate_latency_metrics(results: list[dict]) -> dict:
+    """Compute mean and median latency for retrieval, generation, and end-to-end execution."""
     retrieval = [
         result["retrieval_latency_ms"]
         for result in results
@@ -156,6 +161,7 @@ def print_metrics(
     unanswerable: dict,
     latency: dict,
 ):
+    """Print the benchmark summary in a compact terminal-friendly format."""
     print("\n================================")
     print("       EVALUATION METRICS")
     print("================================")
@@ -221,6 +227,7 @@ def print_metrics(
 
 
 def main():
+    """Load evaluation results, compute metrics, and print the final benchmark summary."""
     results = load_results()
 
     retrieval = calculate_retrieval_metrics(results)

@@ -9,15 +9,15 @@ STORAGE_DIR = Path("storage/documents")
 #  ↓
 # Document ID
 #  ↓
-# آیا قبلاً پردازش شده؟
+
 #  ├── YES → Load cached result
 #  └── NO  → Preprocess → Save result
 
 
 #================================================
-# این تابع PDF را binary می‌خواند و مثلاً می‌دهد:
+
 # 7a8f86c5f36b61c4c8a96e4f...
-# نکته مهم این است که ID بر اساس محتوای فایل است، نه اسمش.
+
 #================================================
 
 def calculate_document_id(file_path: str) -> str:
@@ -27,39 +27,24 @@ def calculate_document_id(file_path: str) -> str:
     The hash is used as the unique document ID.
     """
 
-# سیستم محتوای فایل رو می‌خونه و ازش یک رشته طولانی تولید می‌کنه:
-# ما بهش ميگيم document id كه يه جورايي اثر انگشت اون فايله
 
-
-# یک SHA-256 calculator برام بساز.
-# اما هنوز هيچ فايلي بهش ندادم
     sha256 = hashlib.sha256()
 
-# اينجا خود فايل رو به صورت binary read باز ميكنيم
-# چون ميخواهيم خود فايل رو hash كنيمم
 
     with open(file_path, "rb") as file:
         while chunk := file.read(8192):
             sha256.update(chunk)
 
-# يعني فايل رو تيكه تيكه بخون، هربار حدود 8192 بايتشو بخون
-# اينطوري لازم نيست كل فايل رو وارد ram‌كنيم 
-# خط بعدي هم يعني اين chunk‌رو هم وارد محاسبه hash  كن
 
-
-# در آخر هم ميگوييم fingerprint‌نهايي رو به صورت string بهم بده
     return sha256.hexdigest()
-# اينجا چه اتفاقي ميفته؟‌اين document id‌كه به ازاي اين فايل 
-# ساخته شده، میاد براش یه فولدر در ادرسس که براش تعیین کردیم می سازه
-# حالا فایل هایی که در مرحله oflline preprocessong میخواهیم بسازیم رو اونجا انجام میده
+
+
 # ABC123/
 # │
 # ├── metadata.json
 # ├── structure.json
 # ├── semantic_nodes.json
 # └── tree.json
-
-
 
 
 def get_document_directory(
@@ -72,7 +57,6 @@ def get_document_directory(
     return STORAGE_DIR / document_id
 
 
-#اين تابع بررسي ميكند كه آيا اين داكيومنت قبلا پردازش شده است يا خير
 def document_exists(
     document_id: str,
 ) -> bool:
@@ -84,31 +68,26 @@ def document_exists(
     document_dir = get_document_directory(
         document_id
     )
-# بنابراین ما می‌گیم برای اینکه document را processed 
-# در نظر بگیریم، باید تمام فایل‌های موردنیاز وجود داشته باشند:
-# چون ممکنه ÷ردازش انجام شده و تموم شده ولی فایل ها درست ذخیره نشده باشند 
-# پس لازمه هر 4 تا فایل چک بشه
+
+
     required_files = [
         "metadata.json",
         "structure.json",
         "semantic_nodes.json",
         "tree.json",
     ]
-# وقتی میگوییم return all یعنی همه شرط های داخلش همزمان برقرار باشند
-# در اینجا میشود همه فایل های مورد نیاز موجود باشند
+
+
 # all([True, True, True, True])
 # True
 
-# بنابراین این تابع در نهایت یک پاسخ
-# false یا true برمیگردونه
+
     return all(
         (document_dir / filename).exists()
         for filename in required_files
     )
-    
-    
-    
-    
+
+
 def save_json(
     data,
     file_path: Path,
@@ -135,7 +114,7 @@ def save_json(
             indent=2,
             ensure_ascii=False,
         )
-        
+
 def load_json(
     file_path: Path,
 ):
@@ -149,8 +128,8 @@ def load_json(
         encoding="utf-8",
     ) as file:
         return json.load(file)
-    
-    
+
+
 def save_processed_document(
     document_id: str,
     filename: str,
@@ -162,6 +141,7 @@ def save_processed_document(
     pipeline_version: str = "1.0",
 ) -> None:
 
+    """Persist preprocessing artifacts and metadata under the content-addressed document directory."""
     document_dir = get_document_directory(
         document_id
     )
@@ -201,11 +181,12 @@ def save_processed_document(
         document_tree,
         document_dir / "tree.json",
     )
-    
+
 def load_processed_document(
     document_id: str,
 ) -> dict:
 
+    """Load all persisted artifacts for a previously processed document."""
     if not document_exists(document_id):
         raise FileNotFoundError(
             f"Processed document not found: "

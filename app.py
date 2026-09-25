@@ -8,6 +8,7 @@ from src.ui import create_ui
 
 def main():
 
+    """Initialize the configured language model, build the UI, and launch the application."""
     llm = load_model()
 
     demo = create_ui(
