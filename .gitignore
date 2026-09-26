@@ -76,7 +76,7 @@ data/
 .ruff_cache/
 .coverage
 htmlcov/
-
+demo/*.mp4
 
 # ==============================
 # OS Files
